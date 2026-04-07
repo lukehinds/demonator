@@ -156,14 +156,18 @@ fn run_command(cmd: &str, capture: Option<&Capture>) -> Option<String> {
             .arg("-c")
             .arg(cmd)
             .stdin(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .output();
 
         match output {
             Ok(o) => {
                 let stdout = String::from_utf8_lossy(&o.stdout);
+                let stderr = String::from_utf8_lossy(&o.stderr);
                 print!("{}", stdout);
+                eprint!("{}", stderr);
                 io::stdout().flush().unwrap();
+                io::stderr().flush().unwrap();
 
                 if !o.status.success() {
                     if let Some(code) = o.status.code() {
@@ -173,7 +177,9 @@ fn run_command(cmd: &str, capture: Option<&Capture>) -> Option<String> {
 
                 if let Some(cap) = capture {
                     if let Ok(re) = Regex::new(&cap.pattern) {
-                        if let Some(caps) = re.captures(&stdout) {
+                        // Try stdout first, then stderr
+                        let combined = format!("{}{}", stdout, stderr);
+                        if let Some(caps) = re.captures(&combined) {
                             if let Some(m) = caps.get(1) {
                                 return Some(m.as_str().to_string());
                             }

@@ -5,7 +5,8 @@ pause: 200
 clear: true
 
 steps:
-  - text: "nono run --allow-cwd -- /bin/cat ~/.ssh/id_rsa"
-  - text: "nono why --path /Users/lukehinds/.ssh/id_rsa --op read"
-  - text: "nono run --allow-cwd -- ls -la ~/Library/Keychains"
-  - text: "nono why --path /Users/lukehinds/Library/Keychains --op read"
+  - text: "nono run --detached --allow-cwd --profile claude-code -- claude"
+    capture:
+      name: session_id
+      pattern: "Started detached session (\\w+)"
+  - text: "nono attach {session_id}"
