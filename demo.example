@@ -1,0 +1,16 @@
+speed: 20
+delay: 50
+jitter: 40
+pause: 200
+
+steps:
+  - text: "git clone git@github.com:example/myproject.git"
+  - text: "cd myproject"
+  - text: "cargo build --release"
+    speed: 28
+  - text: "cargo test"
+    speed: 28
+  - text: "cat target/release/myproject --version"
+  - text: "echo 'all good, ready to deploy'"
+    speed: 16
+    jitter: 60

@@ -1,0 +1,11 @@
+speed: 20
+delay: 50
+jitter: 40
+pause: 200
+clear: true
+
+steps:
+  - text: "nono run --allow-cwd -- /bin/cat ~/.ssh/id_rsa"
+  - text: "nono why --path /Users/lukehinds/.ssh/id_rsa --op read"
+  - text: "nono run --allow-cwd -- ls -la ~/Library/Keychains"
+  - text: "nono why --path /Users/lukehinds/Library/Keychains --op read"
