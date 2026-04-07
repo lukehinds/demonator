@@ -58,6 +58,26 @@ steps:
 Each step can override `speed`, `delay`, `jitter`, and `pause`. If both `speed`
 and `delay` are set, `speed` takes priority.
 
+### Capturing command output
+
+Steps can capture values from command output using regex and inject them into
+later steps. Add a `capture` block with a `name` and a `pattern` containing one
+capture group:
+
+```yaml
+steps:
+  - text: "nono run --detached --allow-cwd --profile claude-code -- claude"
+    capture:
+      name: session_id
+      pattern: "Started detached session (\\w+)"
+
+  - text: "nono attach {session_id}"
+```
+
+The first capture group `(\\w+)` is extracted from stdout and stored under the
+given name. Subsequent steps can reference it with `{session_id}`. Multiple
+captures can be used across different steps and combined in a single command.
+
 ### Prompt colors
 
 Use color placeholders in the `prompt` string:
