@@ -113,9 +113,6 @@ fn type_text(text: &str, delay: u64, jitter: u64, pause: u64) {
     let mut handle = stdout.lock();
 
     for ch in text.chars() {
-        handle.write_all(ch.to_string().as_bytes()).unwrap();
-        handle.flush().unwrap();
-
         let base = delay as f64;
         let jitter_amount = if jitter > 0 {
             let j = (base * jitter as f64) / 100.0;
@@ -131,6 +128,9 @@ fn type_text(text: &str, delay: u64, jitter: u64, pause: u64) {
         }
 
         thread::sleep(Duration::from_millis(sleep_ms));
+
+        handle.write_all(ch.to_string().as_bytes()).unwrap();
+        handle.flush().unwrap();
     }
 
     handle.flush().unwrap();
