@@ -34,7 +34,14 @@ struct Capture {
 }
 
 #[derive(Deserialize)]
-struct Step {
+#[serde(untagged)]
+enum Step {
+    Directive(String),
+    Command(CommandStep),
+}
+
+#[derive(Deserialize)]
+struct CommandStep {
     text: String,
     #[serde(default)]
     speed: Option<u64>,
@@ -84,7 +91,7 @@ fn speed_to_delay(speed: u64) -> u64 {
     ((1000.0 / speed as f64).round() as u64).max(1)
 }
 
-fn resolve_delay(step: &Step, config: &Config) -> u64 {
+fn resolve_delay(step: &CommandStep, config: &Config) -> u64 {
     if let Some(speed) = step.speed.or(config.speed) {
         return speed_to_delay(speed);
     }
@@ -269,7 +276,10 @@ mod tests {
         let yaml = "steps:\n  - text: 'echo hello'\n";
         let config: Config = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.steps.len(), 1);
-        assert_eq!(config.steps[0].text, "echo hello");
+        match &config.steps[0] {
+            Step::Command(cmd) => assert_eq!(cmd.text, "echo hello"),
+            _ => panic!("expected Command step"),
+        }
         assert_eq!(config.speed, None);
         assert_eq!(config.delay, 50);
         assert_eq!(config.jitter, 40);
@@ -303,21 +313,31 @@ steps:
         assert!(config.clear);
         assert_eq!(config.prompt, "$ ");
         assert_eq!(config.steps.len(), 2);
-        assert_eq!(config.steps[1].speed, Some(25));
-        assert_eq!(config.steps[1].delay, Some(30));
-        assert_eq!(config.steps[1].jitter, Some(10));
-        assert_eq!(config.steps[1].pause, Some(100));
+        match &config.steps[1] {
+            Step::Command(cmd) => {
+                assert_eq!(cmd.speed, Some(25));
+                assert_eq!(cmd.delay, Some(30));
+                assert_eq!(cmd.jitter, Some(10));
+                assert_eq!(cmd.pause, Some(100));
+            }
+            _ => panic!("expected Command step"),
+        }
     }
 
     #[test]
     fn test_step_defaults_to_none() {
         let yaml = "text: 'echo hello'\n";
         let step: Step = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(step.text, "echo hello");
-        assert!(step.speed.is_none());
-        assert!(step.delay.is_none());
-        assert!(step.jitter.is_none());
-        assert!(step.pause.is_none());
+        match step {
+            Step::Command(cmd) => {
+                assert_eq!(cmd.text, "echo hello");
+                assert!(cmd.speed.is_none());
+                assert!(cmd.delay.is_none());
+                assert!(cmd.jitter.is_none());
+                assert!(cmd.pause.is_none());
+            }
+            _ => panic!("expected Command step"),
+        }
     }
 
     #[test]
@@ -332,15 +352,17 @@ steps:
     delay: 10
 "#;
         let config: Config = serde_yaml::from_str(yaml).unwrap();
-        let s0 = &config.steps[0];
-        let s1 = &config.steps[1];
+        match (&config.steps[0], &config.steps[1]) {
+            (Step::Command(s0), Step::Command(s1)) => {
+                assert_eq!(resolve_delay(s0, &config), 80);
+                assert_eq!(s0.jitter.unwrap_or(config.jitter), 30);
+                assert_eq!(s0.pause.unwrap_or(config.pause), 300);
 
-        assert_eq!(resolve_delay(s0, &config), 80);
-        assert_eq!(s0.jitter.unwrap_or(config.jitter), 30);
-        assert_eq!(s0.pause.unwrap_or(config.pause), 300);
-
-        assert_eq!(resolve_delay(s1, &config), 10);
-        assert_eq!(s1.jitter.unwrap_or(config.jitter), 30);
+                assert_eq!(resolve_delay(s1, &config), 10);
+                assert_eq!(s1.jitter.unwrap_or(config.jitter), 30);
+            }
+            _ => panic!("expected Command steps"),
+        }
     }
 
     #[test]
@@ -358,13 +380,14 @@ steps:
     delay: 10
 "#;
         let config: Config = serde_yaml::from_str(yaml).unwrap();
-        let s0 = &config.steps[0];
-        let s1 = &config.steps[1];
-        let s2 = &config.steps[2];
-
-        assert_eq!(resolve_delay(s0, &config), 50);
-        assert_eq!(resolve_delay(s1, &config), 25);
-        assert_eq!(resolve_delay(s2, &config), 50);
+        match (&config.steps[0], &config.steps[1], &config.steps[2]) {
+            (Step::Command(s0), Step::Command(s1), Step::Command(s2)) => {
+                assert_eq!(resolve_delay(s0, &config), 50);
+                assert_eq!(resolve_delay(s1, &config), 25);
+                assert_eq!(resolve_delay(s2, &config), 50);
+            }
+            _ => panic!("expected Command steps"),
+        }
     }
 
     #[test]
@@ -429,9 +452,14 @@ steps:
       pattern: "session (\\w+)"
 "#;
         let config: Config = serde_yaml::from_str(yaml).unwrap();
-        let cap = config.steps[0].capture.as_ref().unwrap();
-        assert_eq!(cap.name, "session_id");
-        assert_eq!(cap.pattern, "session (\\w+)");
+        match &config.steps[0] {
+            Step::Command(cmd) => {
+                let cap = cmd.capture.as_ref().unwrap();
+                assert_eq!(cap.name, "session_id");
+                assert_eq!(cap.pattern, "session (\\w+)");
+            }
+            _ => panic!("expected Command step"),
+        }
     }
 
     #[test]
@@ -444,13 +472,51 @@ steps:
     }
 
     #[test]
+    fn test_pause_directive() {
+        let yaml = r#"
+steps:
+  - pause
+  - text: "echo hello"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.steps.len(), 2);
+        match &config.steps[0] {
+            Step::Directive(d) => assert_eq!(d, "pause"),
+            _ => panic!("expected Directive step"),
+        }
+        match &config.steps[1] {
+            Step::Command(cmd) => assert_eq!(cmd.text, "echo hello"),
+            _ => panic!("expected Command step"),
+        }
+    }
+
+    #[test]
+    fn test_clear_directive() {
+        let yaml = r#"
+steps:
+  - text: "echo hello"
+  - clear
+  - text: "echo world"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.steps.len(), 3);
+        match &config.steps[1] {
+            Step::Directive(d) => assert_eq!(d, "clear"),
+            _ => panic!("expected Directive step"),
+        }
+    }
+
+    #[test]
     fn test_step_without_capture() {
         let yaml = r#"
 steps:
   - text: "echo hello"
 "#;
         let config: Config = serde_yaml::from_str(yaml).unwrap();
-        assert!(config.steps[0].capture.is_none());
+        match &config.steps[0] {
+            Step::Command(cmd) => assert!(cmd.capture.is_none()),
+            _ => panic!("expected Command step"),
+        }
     }
 }
 
@@ -481,20 +547,39 @@ fn main() {
     let mut vars: HashMap<String, String> = HashMap::new();
 
     for step in &config.steps {
-        let delay = resolve_delay(step, &config);
-        let jitter = step.jitter.unwrap_or(config.jitter);
-        let pause = step.pause.unwrap_or(config.pause);
+        match step {
+            Step::Directive(directive) => match directive.as_str() {
+                "pause" => {
+                    print!("{}", expand_colors(&config.prompt));
+                    io::stdout().flush().unwrap();
+                    wait_for_enter();
+                }
+                "clear" => {
+                    print!("\x1B[2J\x1B[H");
+                    io::stdout().flush().unwrap();
+                }
+                other => {
+                    eprintln!("[demonator] unknown directive: {}", other);
+                    process::exit(1);
+                }
+            },
+            Step::Command(step) => {
+                let delay = resolve_delay(step, &config);
+                let jitter = step.jitter.unwrap_or(config.jitter);
+                let pause = step.pause.unwrap_or(config.pause);
 
-        let cmd = substitute_vars(&step.text, &vars);
+                let cmd = substitute_vars(&step.text, &vars);
 
-        print!("{}", expand_colors(&config.prompt));
-        io::stdout().flush().unwrap();
-        type_text(&cmd, delay, jitter, pause);
-        wait_for_enter();
+                print!("{}", expand_colors(&config.prompt));
+                io::stdout().flush().unwrap();
+                type_text(&cmd, delay, jitter, pause);
+                wait_for_enter();
 
-        if let Some(captured) = run_command(&cmd, step.capture.as_ref()) {
-            if let Some(ref cap) = step.capture {
-                vars.insert(cap.name.clone(), captured);
+                if let Some(captured) = run_command(&cmd, step.capture.as_ref()) {
+                    if let Some(ref cap) = step.capture {
+                        vars.insert(cap.name.clone(), captured);
+                    }
+                }
             }
         }
     }
