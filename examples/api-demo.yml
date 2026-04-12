@@ -1,0 +1,42 @@
+# API demo with fake output — no real services needed
+#
+# Run with: demonator -c examples/api-demo.yml
+
+speed: 24
+clear: true
+highlight: true
+
+steps:
+  - comment: "Let's check our API health and deploy a new version."
+    style: bold
+
+  - text: "curl -s https://api.myapp.com/health | jq ."
+    fake_output: |
+      {
+        "status": "healthy",
+        "version": "1.9.2",
+        "database": "connected",
+        "cache_hit_rate": "94.2%"
+      }
+    execute: false
+
+  - comment: "Looks good. Now let's deploy v2.0.0."
+
+  - text: "kubectl set image deploy/api api=myapp:2.0.0"
+    fake_output: "deployment.apps/api image updated"
+    execute: false
+
+  - text: "kubectl rollout status deploy/api"
+    fake_output: |
+      Waiting for deployment "api" rollout to finish: 1 of 3 updated replicas are available...
+      Waiting for deployment "api" rollout to finish: 2 of 3 updated replicas are available...
+      deployment "api" successfully rolled out
+    output_speed: 30
+    execute: false
+
+  - text: "curl -s https://api.myapp.com/health | jq .version"
+    fake_output: '"2.0.0"'
+    execute: false
+
+  - comment: "Deployment complete!"
+    style: green

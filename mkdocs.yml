@@ -1,0 +1,82 @@
+site_name: demonator
+site_description: Typewriter-style text display for terminal demos
+site_url: https://lukehinds.github.io/demonator
+repo_url: https://github.com/lukehinds/demonator
+repo_name: lukehinds/demonator
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Configuration Reference: configuration.md
+  - Features:
+      - Commentary & Narration: commentary.md
+      - Fake Output: fake-output.md
+      - Syntax Highlighting: syntax-highlighting.md
+      - Chapters & Navigation: chapters.md
+      - Auto-Advance & Recording: auto-advance.md
+      - Wait-for-Pattern: wait-for-pattern.md
+      - Setup & Teardown: setup-teardown.md
+      - Interactive Commands: interactive.md
+      - Conditional Steps: conditionals.md
+  - Authoring Workflow: authoring.md
+  - Examples: examples.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/lukehinds/demonator

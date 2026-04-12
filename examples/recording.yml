@@ -1,0 +1,25 @@
+# Auto-advance example for recording with asciinema
+#
+# Record with: asciinema rec -c "demonator -c examples/recording.yml" demo.cast
+# Convert to GIF: agg demo.cast demo.gif
+
+speed: 28
+auto_advance: 1500
+clear: true
+highlight: true
+
+steps:
+  - comment: "Setting up the project..."
+    style: cyan
+
+  - text: "mkdir -p /tmp/my-project && cd /tmp/my-project"
+    wait: 1000
+
+  - text: "echo 'fn main() { println!(\"Hello, world!\"); }' > main.rs"
+    wait: 1000
+
+  - text: "cat main.rs"
+    wait: 2000
+
+  - comment: "All done! Clean and simple."
+    style: green
