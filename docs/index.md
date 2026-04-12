@@ -6,25 +6,10 @@ Demonator reads a YAML config file and "types" commands out character-by-charact
 with realistic timing, then executes each command when you press Enter. It makes
 live terminal demos look natural and polished.
 
-<div class="grid cards" markdown>
-
-- :material-rocket-launch: **[Getting Started](getting-started.md)**
-
-    Install demonator and create your first demo in under a minute.
-
-- :material-cog: **[Configuration](configuration.md)**
-
-    Full reference for all global options, per-step overrides, and CLI flags.
-
-- :material-palette-outline: **[Features](#features)**
-
-    Commentary, fake output, chapters, highlighting, conditionals, and more.
-
-- :material-file-document-multiple: **[Examples](examples.md)**
-
-    Ready-to-use demo configs for common scenarios.
-
-</div>
+- **[Getting Started](getting-started.md)** — Install demonator and create your first demo in under a minute
+- **[Configuration](configuration.md)** — Full reference for all global options, per-step overrides, and CLI flags
+- **[Features](#features)** — Commentary, fake output, chapters, highlighting, conditionals, and more
+- **[Examples](examples.md)** — Ready-to-use demo configs for common scenarios
 
 ## Quick start
 
