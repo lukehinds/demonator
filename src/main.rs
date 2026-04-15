@@ -2,6 +2,7 @@ use clap::Parser;
 use rand::Rng;
 use regex::Regex;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, BufRead, Read, Write};
@@ -100,7 +101,10 @@ struct CommandStep {
 #[derive(Deserialize)]
 struct Capture {
     name: String,
-    pattern: String,
+    #[serde(default)]
+    pattern: Option<String>,
+    #[serde(default)]
+    json_path: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -468,6 +472,73 @@ fn substitute_vars(text: &str, vars: &HashMap<String, String>) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// JSON path extraction
+// ---------------------------------------------------------------------------
+
+/// Extract a value from JSON using a simple path syntax.
+/// Supports dot notation and array indices: `[0].session_id`, `.name`, `foo.bar[2].baz`
+fn extract_json_path(text: &str, path: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(text).ok()?;
+    let mut current = &parsed;
+
+    for segment in parse_json_path_segments(path) {
+        match segment {
+            JsonSegment::Key(key) => {
+                current = current.get(&key)?;
+            }
+            JsonSegment::Index(idx) => {
+                current = current.get(idx)?;
+            }
+        }
+    }
+
+    match current {
+        Value::String(s) => Some(s.clone()),
+        Value::Null => None,
+        other => Some(other.to_string()),
+    }
+}
+
+enum JsonSegment {
+    Key(String),
+    Index(usize),
+}
+
+fn parse_json_path_segments(path: &str) -> Vec<JsonSegment> {
+    let mut segments = Vec::new();
+    let mut chars = path.chars().peekable();
+
+    while chars.peek().is_some() {
+        // skip leading dots
+        if chars.peek() == Some(&'.') {
+            chars.next();
+        }
+
+        if chars.peek() == Some(&'[') {
+            chars.next(); // consume '['
+            let num: String = chars.by_ref().take_while(|c| *c != ']').collect();
+            if let Ok(idx) = num.parse::<usize>() {
+                segments.push(JsonSegment::Index(idx));
+            }
+        } else {
+            let mut key = String::new();
+            while let Some(&c) = chars.peek() {
+                if c == '.' || c == '[' {
+                    break;
+                }
+                key.push(c);
+                chars.next();
+            }
+            if !key.is_empty() {
+                segments.push(JsonSegment::Key(key));
+            }
+        }
+    }
+
+    segments
+}
+
+// ---------------------------------------------------------------------------
 // Command execution
 // ---------------------------------------------------------------------------
 
@@ -498,15 +569,23 @@ fn run_command(cmd: &str, capture: Option<&Capture>) -> (Option<String>, i32) {
                 }
 
                 if let Some(cap) = capture {
-                    if let Ok(re) = Regex::new(&cap.pattern) {
-                        let combined = format!("{}{}", stdout_str, stderr_str);
-                        if let Some(caps) = re.captures(&combined) {
-                            if let Some(m) = caps.get(1) {
-                                return (Some(m.as_str().to_string()), code);
-                            }
+                    if let Some(ref jp) = cap.json_path {
+                        if let Some(value) = extract_json_path(&stdout_str, jp) {
+                            return (Some(value), code);
+                        } else {
+                            eprintln!("[demonator] json_path '{}' did not match", jp);
                         }
-                    } else {
-                        eprintln!("[demonator] invalid capture pattern: {}", cap.pattern);
+                    } else if let Some(ref pattern) = cap.pattern {
+                        if let Ok(re) = Regex::new(pattern) {
+                            let combined = format!("{}{}", stdout_str, stderr_str);
+                            if let Some(caps) = re.captures(&combined) {
+                                if let Some(m) = caps.get(1) {
+                                    return (Some(m.as_str().to_string()), code);
+                                }
+                            }
+                        } else {
+                            eprintln!("[demonator] invalid capture pattern: {}", pattern);
+                        }
                     }
                 }
 
@@ -848,7 +927,8 @@ struct CommandRef {
 
 struct CaptureRef {
     name: String,
-    pattern: String,
+    pattern: Option<String>,
+    json_path: Option<String>,
 }
 
 struct InteractionRef {
@@ -874,6 +954,7 @@ fn resolve_step(step: &Step) -> ResolvedStep {
                 capture: cmd.capture.as_ref().map(|c| CaptureRef {
                     name: c.name.clone(),
                     pattern: c.pattern.clone(),
+                    json_path: c.json_path.clone(),
                 }),
                 fake_output: cmd.fake_output.clone(),
                 output_speed: cmd.output_speed,
@@ -1242,6 +1323,7 @@ fn run_demo(config: &Config, cli: &Cli) {
                     let capture_ref = cmd.capture.as_ref().map(|c| Capture {
                         name: c.name.clone(),
                         pattern: c.pattern.clone(),
+                        json_path: c.json_path.clone(),
                     });
                     let (captured, _code) =
                         run_command(&resolved_text, capture_ref.as_ref());
@@ -1523,7 +1605,7 @@ steps:
             Step::Command(cmd) => {
                 let cap = cmd.capture.as_ref().unwrap();
                 assert_eq!(cap.name, "session_id");
-                assert_eq!(cap.pattern, "session (\\w+)");
+                assert_eq!(cap.pattern, Some("session (\\w+)".to_string()));
             }
             _ => panic!("expected Command step"),
         }
@@ -1584,6 +1666,69 @@ steps:
             Step::Command(cmd) => assert!(cmd.capture.is_none()),
             _ => panic!("expected Command step"),
         }
+    }
+
+    #[test]
+    fn test_json_path_capture_deserialize() {
+        let yaml = r#"
+steps:
+  - text: "nono audit list --json"
+    capture:
+      name: session_id
+      json_path: "[0].session_id"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        match &config.steps[0] {
+            Step::Command(cmd) => {
+                let cap = cmd.capture.as_ref().unwrap();
+                assert_eq!(cap.name, "session_id");
+                assert!(cap.pattern.is_none());
+                assert_eq!(cap.json_path, Some("[0].session_id".to_string()));
+            }
+            _ => panic!("expected Command step"),
+        }
+    }
+
+    #[test]
+    fn test_extract_json_path_array_index() {
+        let json = r#"[{"session_id": "abc123"}, {"session_id": "def456"}]"#;
+        assert_eq!(
+            extract_json_path(json, "[0].session_id"),
+            Some("abc123".to_string())
+        );
+        assert_eq!(
+            extract_json_path(json, "[1].session_id"),
+            Some("def456".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_json_path_nested() {
+        let json = r#"{"data": {"items": [{"id": 42}]}}"#;
+        assert_eq!(
+            extract_json_path(json, "data.items[0].id"),
+            Some("42".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_json_path_simple_key() {
+        let json = r#"{"name": "hello"}"#;
+        assert_eq!(
+            extract_json_path(json, "name"),
+            Some("hello".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_json_path_no_match() {
+        let json = r#"{"name": "hello"}"#;
+        assert_eq!(extract_json_path(json, "missing"), None);
+    }
+
+    #[test]
+    fn test_extract_json_path_invalid_json() {
+        assert_eq!(extract_json_path("not json", "foo"), None);
     }
 
     // --- New feature tests ---
