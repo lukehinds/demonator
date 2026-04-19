@@ -151,7 +151,7 @@ fn default_delay() -> u64 {
     50
 }
 fn default_jitter() -> u64 {
-    40
+    0
 }
 fn default_pause() -> u64 {
     200
@@ -1407,7 +1407,7 @@ mod tests {
     #[test]
     fn test_default_values() {
         assert_eq!(default_delay(), 50);
-        assert_eq!(default_jitter(), 40);
+        assert_eq!(default_jitter(), 0);
         assert_eq!(default_pause(), 200);
         assert_eq!(default_prompt(), "{green}~{reset} {blue}${reset} ");
         assert_eq!(speed_to_delay(20), 50);
@@ -1424,7 +1424,7 @@ mod tests {
         }
         assert_eq!(config.speed, None);
         assert_eq!(config.delay, 50);
-        assert_eq!(config.jitter, 40);
+        assert_eq!(config.jitter, 0);
         assert_eq!(config.pause, 200);
         assert!(!config.clear);
         assert!(!config.highlight);
