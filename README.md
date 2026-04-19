@@ -221,6 +221,41 @@ When using chapters, navigation is available at each Enter prompt:
 | `p`    | Go back to previous chapter     |
 | `1`-`9`| Jump to chapter by number       |
 
+### User prompts
+
+Pause the demo and collect input from the presenter. Responses are stored as
+variables that later steps can reference or use as conditions.
+
+**Yes/no confirmation:**
+
+```yaml
+steps:
+  - ask: "Deploy to production?"
+    capture: confirmed
+
+  - text: "kubectl apply -f deployment.yaml"
+    if: confirmed
+```
+
+Displays `? Deploy to production? [y/N]`. Answering `y` or `yes` sets the
+variable; anything else (including Enter) leaves it unset.
+
+**Free-text input:**
+
+```yaml
+steps:
+  - input: "Save denied paths as user profile? Enter a name (or press Enter to skip):"
+    capture: profile_name
+    default: "default-local"
+
+  - text: "nono profile save {profile_name}"
+    if: profile_name
+```
+
+Displays `? ... [default-local]`. Press Enter to accept the default, or type a
+value. When no `default` is set the hint shows `[enter]` to signal that Enter
+skips the step.
+
 ### Expect-style interaction
 
 Send keystrokes to interactive commands when expected output patterns appear.

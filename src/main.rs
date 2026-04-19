@@ -54,8 +54,24 @@ struct Chapter {
 #[serde(untagged)]
 enum Step {
     Directive(String),
+    Ask(AskStep),
+    Input(InputStep),
     Command(CommandStep),
     Comment(CommentStep),
+}
+
+#[derive(Deserialize)]
+struct AskStep {
+    ask: String,
+    capture: String,
+}
+
+#[derive(Deserialize)]
+struct InputStep {
+    input: String,
+    capture: String,
+    #[serde(default)]
+    default: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -334,13 +350,6 @@ fn speed_to_delay(speed: u64) -> u64 {
         return default_delay();
     }
     ((1000.0 / speed as f64).round() as u64).max(1)
-}
-
-fn resolve_delay(step: &CommandStep, config: &Config) -> u64 {
-    if let Some(speed) = step.speed.or(config.speed) {
-        return speed_to_delay(speed);
-    }
-    step.delay.unwrap_or(config.delay)
 }
 
 // ---------------------------------------------------------------------------
@@ -816,23 +825,6 @@ fn run_command_interact(cmd: &str, interactions: &[Interaction]) -> i32 {
 // Feature helpers
 // ---------------------------------------------------------------------------
 
-fn should_run_step(cmd: &CommandStep, vars: &HashMap<String, String>) -> bool {
-    if let Some(ref var_name) = cmd.if_condition {
-        match vars.get(var_name) {
-            Some(v) if !v.trim().is_empty() => {}
-            _ => return false,
-        }
-    }
-    if let Some(ref var_name) = cmd.unless {
-        if let Some(v) = vars.get(var_name) {
-            if !v.trim().is_empty() {
-                return false;
-            }
-        }
-    }
-    true
-}
-
 fn style_to_ansi(style: Option<&str>) -> &str {
     match style {
         Some("dim") => "\x1B[2m",
@@ -904,6 +896,8 @@ struct ResolvedStep {
 enum StepRef {
     Directive(String),
     Comment(String, Option<String>),
+    Ask(String, String),            // (message, capture_name)
+    Input(String, String, Option<String>), // (message, capture_name, default)
     Command(CommandRef),
 }
 
@@ -940,6 +934,12 @@ fn resolve_step(step: &Step) -> ResolvedStep {
     match step {
         Step::Directive(d) => ResolvedStep {
             step: StepRef::Directive(d.clone()),
+        },
+        Step::Ask(a) => ResolvedStep {
+            step: StepRef::Ask(a.ask.clone(), a.capture.clone()),
+        },
+        Step::Input(i) => ResolvedStep {
+            step: StepRef::Input(i.input.clone(), i.capture.clone(), i.default.clone()),
         },
         Step::Comment(c) => ResolvedStep {
             step: StepRef::Comment(c.comment.clone(), c.style.clone()),
@@ -1033,6 +1033,19 @@ fn print_dry_run(config: &Config) {
         match &resolved.step {
             StepRef::Directive(d) => {
                 println!("\x1B[2m[{}]\x1B[0m", d);
+            }
+            StepRef::Ask(msg, capture) => {
+                println!("\x1B[33m[ask]\x1B[0m {} \x1B[2m→ {}\x1B[0m", msg, capture);
+            }
+            StepRef::Input(msg, capture, default) => {
+                let default_hint = default
+                    .as_deref()
+                    .map(|d| format!(" \x1B[2m(default: {})\x1B[0m", d))
+                    .unwrap_or_default();
+                println!(
+                    "\x1B[33m[input]\x1B[0m {} \x1B[2m→ {}{}\x1B[0m",
+                    msg, capture, default_hint
+                );
             }
             StepRef::Comment(text, style) => {
                 let ansi = style_to_ansi(style.as_deref());
@@ -1173,6 +1186,46 @@ fn run_demo(config: &Config, cli: &Cli) {
                     process::exit(1);
                 }
             },
+
+            StepRef::Ask(msg, capture_name) => {
+                print!("\x1B[33m?\x1B[0m {} \x1B[2m[y/N]\x1B[0m ", msg);
+                io::stdout().flush().unwrap();
+                let tty = fs::File::open("/dev/tty").expect("failed to open /dev/tty");
+                let mut reader = io::BufReader::new(tty);
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap_or(0);
+                let answer = line.trim().to_lowercase();
+                if answer == "y" || answer == "yes" {
+                    vars.insert(capture_name.clone(), "y".to_string());
+                } else {
+                    vars.remove(capture_name);
+                }
+                idx += 1;
+                continue;
+            }
+
+            StepRef::Input(msg, capture_name, default) => {
+                let hint = default.as_deref().unwrap_or("enter");
+                print!("\x1B[33m?\x1B[0m {} \x1B[2m[{}]\x1B[0m ", msg, hint);
+                io::stdout().flush().unwrap();
+                let tty = fs::File::open("/dev/tty").expect("failed to open /dev/tty");
+                let mut reader = io::BufReader::new(tty);
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap_or(0);
+                let answer = line.trim().to_string();
+                let value = if answer.is_empty() {
+                    default.clone()
+                } else {
+                    Some(answer)
+                };
+                if let Some(v) = value {
+                    vars.insert(capture_name.clone(), v);
+                } else {
+                    vars.remove(capture_name);
+                }
+                idx += 1;
+                continue;
+            }
 
             StepRef::Comment(text, style) => {
                 let comment = CommentStep {

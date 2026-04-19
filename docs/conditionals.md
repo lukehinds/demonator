@@ -96,9 +96,28 @@ steps:
     if: has_env
 ```
 
+### Branching on presenter input
+
+`ask` and `input` steps also set variables, so conditions work the same way:
+
+```yaml
+steps:
+  - ask: "Deploy to production?"
+    capture: confirmed
+
+  - text: "kubectl apply -f deployment.yaml"
+    if: confirmed
+
+  - comment: "Skipping deployment."
+    unless: confirmed
+```
+
+See [User prompts](user-prompts.md) for the full reference.
+
 ## Tips
 
-- Variable names match the `name` field from a `capture` block
+- Variables come from `capture` blocks on command steps, `ask` steps, and
+  `input` steps — all feed the same variable map
 - A variable containing only whitespace is treated as empty (not set)
 - Conditions are evaluated at runtime, so the same demo can behave differently
   on different machines

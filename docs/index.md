@@ -50,6 +50,7 @@ demonator
 | [Wait-for-pattern](wait-for-pattern.md) | Pause until regex matches in output |
 | [Setup & teardown](setup-teardown.md) | Hidden environment prep and cleanup |
 | [Interactive commands](interactive.md) | Expect-style responses to prompts |
+| [User prompts](user-prompts.md) | Collect yes/no or free-text input from the presenter |
 | [Conditional steps](conditionals.md) | Branch based on captured variables |
 | [Authoring tools](authoring.md) | Dry-run preview and hot reload |
 
