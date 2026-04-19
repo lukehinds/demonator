@@ -125,7 +125,8 @@ struct Capture {
 
 #[derive(Deserialize)]
 struct Interaction {
-    expect: String,
+    #[serde(default)]
+    expect: Option<String>,
     send: String,
 }
 
@@ -785,6 +786,29 @@ fn run_command_interact(cmd: &str, interactions: &[Interaction]) -> i32 {
     let mut interaction_idx = 0;
 
     while interaction_idx < interactions.len() {
+        let interaction = &interactions[interaction_idx];
+
+        if interaction.expect.is_none() {
+            // No pattern to wait for — drain any pending output briefly then send.
+            loop {
+                match rx.recv_timeout(Duration::from_millis(500)) {
+                    Ok(chunk) => {
+                        print!("{}", String::from_utf8_lossy(&chunk));
+                        io::stdout().flush().unwrap();
+                    }
+                    Err(_) => break,
+                }
+            }
+            let response = format!("{}\n", interaction.send);
+            if stdin.write_all(response.as_bytes()).is_err() {
+                break;
+            }
+            let _ = stdin.flush();
+            interaction_idx += 1;
+            continue;
+        }
+
+        let expect = interaction.expect.as_deref().unwrap();
         match rx.recv_timeout(Duration::from_secs(30)) {
             Ok(chunk) => {
                 let text = String::from_utf8_lossy(&chunk);
@@ -792,8 +816,8 @@ fn run_command_interact(cmd: &str, interactions: &[Interaction]) -> i32 {
                 io::stdout().flush().unwrap();
                 accumulated.push_str(&text);
 
-                if accumulated.contains(&interactions[interaction_idx].expect) {
-                    let response = format!("{}\n", interactions[interaction_idx].send);
+                if accumulated.contains(expect) {
+                    let response = format!("{}\n", interaction.send);
                     if stdin.write_all(response.as_bytes()).is_err() {
                         break;
                     }
@@ -926,7 +950,7 @@ struct CaptureRef {
 }
 
 struct InteractionRef {
-    expect: String,
+    expect: Option<String>,
     send: String,
 }
 
@@ -1947,10 +1971,30 @@ steps:
             Step::Command(cmd) => {
                 let interactions = cmd.interact.as_ref().unwrap();
                 assert_eq!(interactions.len(), 2);
-                assert_eq!(interactions[0].expect, "package name:");
+                assert_eq!(interactions[0].expect.as_deref(), Some("package name:"));
                 assert_eq!(interactions[0].send, "my-app");
-                assert_eq!(interactions[1].expect, "version:");
+                assert_eq!(interactions[1].expect.as_deref(), Some("version:"));
                 assert_eq!(interactions[1].send, "1.0.0");
+            }
+            _ => panic!("expected Command step"),
+        }
+    }
+
+    #[test]
+    fn test_interact_no_expect() {
+        let yaml = r#"
+steps:
+  - text: "my-cmd"
+    interact:
+      - send: "my-cool-app"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        match &config.steps[0] {
+            Step::Command(cmd) => {
+                let interactions = cmd.interact.as_ref().unwrap();
+                assert_eq!(interactions.len(), 1);
+                assert_eq!(interactions[0].expect, None);
+                assert_eq!(interactions[0].send, "my-cool-app");
             }
             _ => panic!("expected Command step"),
         }
