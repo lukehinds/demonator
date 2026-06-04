@@ -557,17 +557,6 @@ fn wait_for_input(has_chapters: bool) -> NavAction {
     }
 }
 
-fn wait_for_enter() {
-    let tty = fs::File::open("/dev/tty").expect("failed to open /dev/tty");
-    let mut reader = io::BufReader::new(tty);
-    let mut buf = [0u8; 1];
-    loop {
-        if reader.read(&mut buf).unwrap_or(0) > 0 && buf[0] == b'\n' {
-            break;
-        }
-    }
-}
-
 // Wait for any keypress without echoing (no cursor movement, safe for erasing
 // the line afterwards). Used by wait_after so Enter's newline doesn't interfere.
 fn wait_for_any_key_silent() {
@@ -1507,6 +1496,9 @@ fn run_demo(config: &Config, cli: &Cli) {
     let mut vars: HashMap<String, String> = HashMap::new();
     let mut idx: usize = 0;
     let mut chapter_idx: usize = 0;
+    // A `pause` leaves a prompt on screen and keeps the cursor on that line, so
+    // the next command should type into it rather than print a second prompt.
+    let mut prompt_shown = false;
 
     while idx < demo.steps.len() {
         // Check chapter boundary
@@ -1522,14 +1514,15 @@ fn run_demo(config: &Config, cli: &Cli) {
                     io::stdout().flush().unwrap();
                     if let Some(ms) = config.auto_advance {
                         thread::sleep(Duration::from_millis(ms));
-                        println!();
                     } else {
-                        wait_for_enter();
+                        wait_for_enter_silent();
                     }
+                    prompt_shown = true;
                 }
                 "clear" => {
                     print!("\x1B[2J\x1B[H");
                     io::stdout().flush().unwrap();
+                    prompt_shown = false;
                 }
                 other => {
                     eprintln!("[demonator] unknown directive: {}", other);
@@ -1660,8 +1653,12 @@ fn run_demo(config: &Config, cli: &Cli) {
                     continue;
                 }
 
-                // Type the command
-                print!("{}", prompt);
+                // Type the command. A preceding `pause` already left a prompt on
+                // this line, so don't print a second one.
+                if !prompt_shown {
+                    print!("{}", prompt);
+                }
+                prompt_shown = false;
                 io::stdout().flush().unwrap();
 
                 if cmd.wait_before {
