@@ -47,6 +47,8 @@ struct Config {
     steps: Vec<Step>,
     #[serde(default)]
     chapters: Vec<Chapter>,
+    #[serde(default = "default_true")]
+    show_exit_status: bool,
 }
 
 #[derive(Deserialize)]
@@ -826,6 +828,7 @@ fn run_command(
     capture: Option<&Capture>,
     env_state: &mut HashMap<String, String>,
     overlay: &HashMap<String, String>,
+    show_exit_status: bool,
 ) -> (Option<String>, i32) {
     let needs_capture = capture.is_some();
     let before = env_state.clone();
@@ -851,7 +854,7 @@ fn run_command(
                 io::stderr().flush().unwrap();
 
                 let code = o.status.code().unwrap_or(1);
-                if !o.status.success() {
+                if !o.status.success() && show_exit_status {
                     eprintln!("[demonator] command exited with status {}", code);
                 }
 
@@ -896,7 +899,7 @@ fn run_command(
             Ok((s, snapshot)) => {
                 persist_env_snapshot(env_state, &before, overlay, snapshot);
                 let code = s.code().unwrap_or(1);
-                if !s.success() {
+                if !s.success() && show_exit_status {
                     eprintln!("[demonator] command exited with status {}", code);
                 }
                 (None, code)
@@ -1789,6 +1792,7 @@ fn run_demo(config: &Config, cli: &Cli) {
                         capture_ref.as_ref(),
                         &mut runtime_env,
                         &cmd.env,
+                        config.show_exit_status,
                     );
                     if let Some(value) = captured {
                         if let Some(ref cap) = cmd.capture {
@@ -2314,6 +2318,7 @@ steps:
             None,
             &mut env_state,
             &overlay,
+            true,
         );
         assert_eq!(code, 0);
         assert_eq!(
@@ -2330,6 +2335,7 @@ steps:
             }),
             &mut env_state,
             &overlay,
+            true,
         );
         assert_eq!(code, 0);
         assert_eq!(captured.as_deref(), Some("s3cr3t_t0k3n"));
