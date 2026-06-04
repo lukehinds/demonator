@@ -56,6 +56,7 @@ steps:
 | `pause`        | `200`                                | Extra milliseconds after punctuation              |
 | `highlight`    | `false`                              | Syntax-highlight commands as they are typed       |
 | `auto_advance` | --                                   | Milliseconds to wait before auto-advancing (no Enter needed) |
+| `show_exit_status` | `true`                           | Print `[demonator] command exited with status N` on non-zero exit; set `false` to suppress |
 
 ### Per-step overrides
 

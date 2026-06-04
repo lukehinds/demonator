@@ -17,6 +17,7 @@ Demonator is configured with a YAML file (default: `demo.yml`).
 | `setup`        | string[] | --                                   | Commands to run silently before the demo          |
 | `teardown`     | string[] | --                                   | Commands to run silently after the demo           |
 | `env`          | map      | `{}`                                 | Environment variables exported into every command |
+| `show_exit_status` | bool | `true`                               | Print `[demonator] command exited with status N` when a command exits non-zero |
 
 ## Steps
 
@@ -109,6 +110,29 @@ steps:
 Values are passed verbatim to the spawned shell — they are not interpolated
 by demonator. To pull a value from the host environment, reference it from
 the command itself: `text: "echo $TOKEN"`.
+
+## Exit status reporting
+
+When a command exits with a non-zero status, demonator prints a banner to
+stderr:
+
+```
+[demonator] command exited with status 126
+```
+
+This is on by default. If your demo deliberately runs commands that exit
+non-zero (showing a failure case, for example), set `show_exit_status: false`
+at the top level to suppress the banner for the whole demo:
+
+```yaml
+show_exit_status: false
+
+steps:
+  - text: "./flaky-command"     # no banner even if it fails
+```
+
+This only silences demonator's own banner — the command's own stdout and
+stderr are always passed through untouched.
 
 ## Capture block
 
