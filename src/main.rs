@@ -1638,7 +1638,8 @@ fn run_demo(config: &Config, cli: &Cli) {
                                 None
                             };
                             if let Some(v) = value {
-                                vars.insert(cap.name.clone(), v);
+                                vars.insert(cap.name.clone(), v.clone());
+                                runtime_env.insert(cap.name.clone(), v);
                             }
                         }
                     } else {
@@ -1796,7 +1797,10 @@ fn run_demo(config: &Config, cli: &Cli) {
                     );
                     if let Some(value) = captured {
                         if let Some(ref cap) = cmd.capture {
-                            vars.insert(cap.name.clone(), value);
+                            // Available to demonator `{name}` substitution...
+                            vars.insert(cap.name.clone(), value.clone());
+                            // ...and exported so later steps' shells expand `$name`.
+                            runtime_env.insert(cap.name.clone(), value);
                         }
                     }
                 }
